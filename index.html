@@ -1,336 +1,240 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>DiscoDuck Parquet Viewer</title>
-  <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; margin: 1rem; }
-    header { display:flex; gap:1rem; align-items:center; }
-    main { margin-top:1rem; }
-    select, button, input, textarea { font:inherit; padding:.35rem .5rem; }
-    .controls { display:flex; gap:.5rem; align-items:center; margin-top:.5rem; flex-wrap:wrap; }
-    .schema { margin-top:.75rem; }
-    table { border-collapse:collapse; width:100%; margin-top:1rem; }
-    th,td { border:1px solid #ddd; padding:.4rem .6rem; text-align:left; }
-    th { background:#f6f6f6; position: sticky; top:0; }
-    #log { white-space:pre-wrap; font-family: monospace; margin-top:.75rem; color:#444; max-height:8rem; overflow:auto; border:1px solid #eee; padding:.5rem; background:#fafafa; }
-    .small { font-size:.9rem; color:#666; }
-    .loader { display:inline-block; width:1rem; height:1rem; border:3px solid rgba(0,0,0,0.1); border-left-color:#333; border-radius:50%; animation:spin 0.9s linear infinite; vertical-align:middle; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DiscoDuck Parquet Viewer</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 2rem; line-height: 1.5; }
+        h1 { margin-bottom: 1rem; }
+        .controls { margin-bottom: 1rem; padding: 1rem; background: #f6f8fa; border-radius: 6px; border: 1px solid #d0d7de; }
+        select, input, button { font-size: 1rem; padding: 0.5rem; margin-right: 0.5rem; margin-bottom: 0.5rem; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.9rem; }
+        th, td { border: 1px solid #d0d7de; padding: 8px; text-align: left; }
+        th { background-color: #f6f8fa; }
+        tr:nth-child(even) { background-color: #fcfcfc; }
+        .error { color: #cf222e; font-weight: bold; margin-top: 1rem; }
+        .loading { color: #0969da; font-weight: bold; }
+        .pagination { margin-top: 1rem; display: flex; gap: 1rem; align-items: center; }
+    </style>
 </head>
 <body>
-  <header>
-    <h1>DiscoDuck Parquet Viewer</h1>
-    <div class="small">Load parquet from your DiscoDuck release and inspect/filter rows with hyparquet</div>
-  </header>
 
-  <main>
-    <div>
-      <label for="releaseUrl">Release API URL</label>
-      <input id="releaseUrl" style="width:60%" value="https://api.github.com/repos/jacobmgreer/DiscoDuck/releases/tags/2026-02" />
-      <button id="loadAssetsBtn">Fetch assets</button>
-      <span id="fetchStatus" class="small"></span>
-    </div>
+<h1>DiscoDuck Data Viewer</h1>
+<p>Viewing release: <code>2026-02</code></p>
 
-    <div class="controls">
-      <label for="assetSelect">Parquet asset</label>
-      <select id="assetSelect" style="min-width:40%"></select>
-      <button id="inspectBtn" disabled>Inspect</button>
-      <button id="loadBtn" disabled>Load & Render (first 500 rows)</button>
-      <button id="streamBtn" disabled>Stream progressively</button>
-    </div>
+<div class="controls">
+    <label for="fileSelect"><strong>Select File:</strong></label><br>
+    <select id="fileSelect">
+        <option value="" disabled selected>Choose a parquet file...</option>
+        <!-- Categories: Special -->
+        <option value="_artists.parquet">_artists.parquet</option>
+        <option value="_labels.parquet">_labels.parquet</option>
+        <option value="_masters.parquet">_masters.parquet</option>
+        <hr>
+        <!-- Categories: Genres -->
+        <option value="Blues-releases-basics.parquet">Blues - Basics</option>
+        <option value="Blues-releases-tracks.parquet">Blues - Tracks</option>
+        <option value="Blues-releases-videos.parquet">Blues - Videos</option>
+        <option value="Brass_Military-releases-basics.parquet">Brass/Military - Basics</option>
+        <option value="Brass_Military-releases-tracks.parquet">Brass/Military - Tracks</option>
+        <option value="Brass_Military-releases-videos.parquet">Brass/Military - Videos</option>
+        <option value="Children_s-releases-basics.parquet">Children's - Basics</option>
+        <option value="Children_s-releases-tracks.parquet">Children's - Tracks</option>
+        <option value="Children_s-releases-videos.parquet">Children's - Videos</option>
+        <option value="Classical-releases-basics.parquet">Classical - Basics</option>
+        <option value="Classical-releases-tracks.parquet">Classical - Tracks</option>
+        <option value="Classical-releases-videos.parquet">Classical - Videos</option>
+        <option value="Electronic-releases-basics.parquet">Electronic - Basics</option>
+        <option value="Electronic-releases-tracks.parquet">Electronic - Tracks</option>
+        <option value="Electronic-releases-videos.parquet">Electronic - Videos</option>
+        <option value="Folk_World_Country-releases-basics.parquet">Folk/World/Country - Basics</option>
+        <option value="Folk_World_Country-releases-tracks.parquet">Folk/World/Country - Tracks</option>
+        <option value="Folk_World_Country-releases-videos.parquet">Folk/World/Country - Videos</option>
+        <option value="Funk_Soul-releases-basics.parquet">Funk/Soul - Basics</option>
+        <option value="Funk_Soul-releases-tracks.parquet">Funk/Soul - Tracks</option>
+        <option value="Funk_Soul-releases-videos.parquet">Funk/Soul - Videos</option>
+        <option value="Hip_Hop-releases-basics.parquet">Hip Hop - Basics</option>
+        <option value="Hip_Hop-releases-tracks.parquet">Hip Hop - Tracks</option>
+        <option value="Hip_Hop-releases-videos.parquet">Hip Hop - Videos</option>
+        <option value="Jazz-releases-basics.parquet">Jazz - Basics</option>
+        <option value="Jazz-releases-tracks.parquet">Jazz - Tracks</option>
+        <option value="Jazz-releases-videos.parquet">Jazz - Videos</option>
+        <option value="Latin-releases-basics.parquet">Latin - Basics</option>
+        <option value="Latin-releases-tracks.parquet">Latin - Tracks</option>
+        <option value="Latin-releases-videos.parquet">Latin - Videos</option>
+        <option value="Non_Music-releases-basics.parquet">Non Music - Basics</option>
+        <option value="Non_Music-releases-tracks.parquet">Non Music - Tracks</option>
+        <option value="Non_Music-releases-videos.parquet">Non Music - Videos</option>
+        <option value="Pop-releases-basics.parquet">Pop - Basics</option>
+        <option value="Pop-releases-tracks.parquet">Pop - Tracks</option>
+        <option value="Pop-releases-videos.parquet">Pop - Videos</option>
+        <option value="Reggae-releases-basics.parquet">Reggae - Basics</option>
+        <option value="Reggae-releases-tracks.parquet">Reggae - Tracks</option>
+        <option value="Reggae-releases-videos.parquet">Reggae - Videos</option>
+        <option value="Rock-releases-basics.parquet">Rock - Basics</option>
+        <option value="Rock-releases-tracks.parquet">Rock - Tracks</option>
+        <option value="Rock-releases-videos.parquet">Rock - Videos</option>
+        <option value="Stage_Screen-releases-basics.parquet">Stage/Screen - Basics</option>
+        <option value="Stage_Screen-releases-tracks.parquet">Stage/Screen - Tracks</option>
+        <option value="Stage_Screen-releases-videos.parquet">Stage/Screen - Videos</option>
+    </select>
+    <button id="loadBtn">Load</button>
+    <br><br>
+    
+    <label for="filterInput">Filter (current page):</label>
+    <input type="text" id="filterInput" placeholder="Type to filter..." disabled>
+</div>
 
-    <div class="schema" id="schemaContainer" hidden>
-      <strong>Schema / Columns</strong>
-      <div id="columnsList"></div>
-      <div style="margin-top:.5rem">
-        <label for="columnSelect">Columns to display (comma separated)</label>
-        <input id="columnSelect" placeholder="e.g. name,age" style="width:40%" />
-      </div>
-      <div style="margin-top:.5rem">
-        <label for="filterInput">Simple filter (JSON or key=value). Example JSON: {"age":{"$gte":30}} or example key=value: age=30</label>
-        <input id="filterInput" style="width:60%" placeholder='e.g. country=US or {"age":{"$gte":30}}' />
-      </div>
-    </div>
+<div id="status" class="loading"></div>
+<div id="error" class="error"></div>
 
-    <div id="tableContainer"></div>
+<div id="tableContainer"></div>
 
-    <div id="log" aria-live="polite"></div>
-  </main>
+<div class="pagination" id="paginationControls" style="display:none;">
+    <button id="prevBtn" disabled>Previous</button>
+    <span id="pageInfo">Page 1</span>
+    <button id="nextBtn">Next</button>
+</div>
 
-  <script>
-  // Helper: append to log
-  const logEl = document.getElementById('log')
-  function log(...args) { logEl.textContent += args.map(String).join(' ') + '\\n'; logEl.scrollTop = logEl.scrollHeight; }
+<script type="module">
+    import { asyncBufferFromUrl, parquetReadObjects, parquetMetadataAsync } from 'https://cdn.jsdelivr.net/npm/hyparquet/src/hyparquet.min.js';
 
-  // UI elements
-  const releaseUrlInput = document.getElementById('releaseUrl')
-  const loadAssetsBtn = document.getElementById('loadAssetsBtn')
-  const assetSelect = document.getElementById('assetSelect')
-  const inspectBtn = document.getElementById('inspectBtn')
-  const loadBtn = document.getElementById('loadBtn')
-  const streamBtn = document.getElementById('streamBtn')
-  const schemaContainer = document.getElementById('schemaContainer')
-  const columnsList = document.getElementById('columnsList')
-  const columnSelect = document.getElementById('columnSelect')
-  const filterInput = document.getElementById('filterInput')
-  const tableContainer = document.getElementById('tableContainer')
-  const fetchStatus = document.getElementById('fetchStatus')
+    const RELEASE_TAG = '2026-02';
+    // Use a CORS proxy if direct GitHub downloads are blocked by browser security. 
+    // For direct GitHub Pages usage, usually GitHub releases redirect and can be tricky with CORS.
+    // If this fails, consider using a proxy like 'https://cors-anywhere.herokuapp.com/' prefix 
+    // OR hosting the parquet files in the gh-pages branch itself.
+    const BASE_URL = `https://github.com/jacobmgreer/DiscoDuck/releases/download/${RELEASE_TAG}/`;
+    
+    let currentFile = null;
+    let currentRowStart = 0;
+    const PAGE_SIZE = 100;
+    let totalRows = 0;
+    let allDataOnPage = []; // Store raw data for client-side filtering
 
-  // dynamic import of hyparquet
-  let hyparquet = null
-  async function ensureHyparquet() {
-    if (!hyparquet) {
-      // hyparquet published as ESM; import from jsdelivr CDN
-      hyparquet = await import('https://cdn.jsdelivr.net/npm/hyparquet/src/hyparquet.min.js')
-      log('hyparquet loaded:', hyparquet ? 'ok' : 'failed')
-    }
-    return hyparquet
-  }
+    const els = {
+        select: document.getElementById('fileSelect'),
+        loadBtn: document.getElementById('loadBtn'),
+        status: document.getElementById('status'),
+        error: document.getElementById('error'),
+        container: document.getElementById('tableContainer'),
+        filter: document.getElementById('filterInput'),
+        pagination: document.getElementById('paginationControls'),
+        prevBtn: document.getElementById('prevBtn'),
+        nextBtn: document.getElementById('nextBtn'),
+        pageInfo: document.getElementById('pageInfo')
+    };
 
-  // Get release JSON and populate assets
-  loadAssetsBtn.addEventListener('click', async () => {
-    assetSelect.innerHTML = ''
-    fetchStatus.textContent = 'Fetching…'
-    try {
-      const url = releaseUrlInput.value.trim()
-      const res = await fetch(url)
-      if (!res.ok) throw new Error(res.status + ' ' + res.statusText)
-      const release = await res.json()
-      // assets are in release.assets
-      const parquetAssets = (release.assets || []).filter(a => a.name && a.name.toLowerCase().endsWith('.parquet'))
-      if (!parquetAssets.length) {
-        fetchStatus.textContent = 'No .parquet assets found on this release.'
-        log('Release JSON does not contain parquet assets or assets array is empty. If repo is private you may need an authenticated request.')
-        return
-      }
-      for (const a of parquetAssets) {
-        const opt = document.createElement('option')
-        opt.value = a.browser_download_url
-        opt.textContent = a.name + ' (' + (a.size ? (a.size/1024|0) + 'KB' : 'unknown') + ')'
-        opt.dataset.size = a.size
-        assetSelect.appendChild(opt)
-      }
-      inspectBtn.disabled = false
-      loadBtn.disabled = false
-      streamBtn.disabled = false
-      fetchStatus.textContent = 'Found ' + parquetAssets.length + ' parquet asset(s).'
-      log('Found assets:', parquetAssets.map(a => a.name).join(', '))
-    } catch (err) {
-      fetchStatus.textContent = 'Error fetching release: ' + err.message
-      log('Error fetching release:', err)
-    }
-  })
+    els.loadBtn.addEventListener('click', () => loadParquet(0));
+    els.prevBtn.addEventListener('click', () => loadParquet(currentRowStart - PAGE_SIZE));
+    els.nextBtn.addEventListener('click', () => loadParquet(currentRowStart + PAGE_SIZE));
+    
+    els.filterInput.addEventListener('input', (e) => {
+        const term = e.target.value.toLowerCase();
+        const filtered = allDataOnPage.filter(row => 
+            Object.values(row).some(val => String(val).toLowerCase().includes(term))
+        );
+        renderTable(filtered);
+    });
 
-  // Inspect: get metadata and show column names
-  inspectBtn.addEventListener('click', async () => {
-    try {
-      const url = assetSelect.value
-      if (!url) return
-      await ensureHyparquet()
-      fetchStatus.textContent = 'Inspecting metadata…'
-      log('Inspecting', url)
-      // Try HEAD to get content-length to pass byteLength (optional)
-      let byteLength
-      try {
-        const head = await fetch(url, { method: 'HEAD' })
-        if (head.ok) {
-          const cl = head.headers.get('content-length')
-          byteLength = cl ? Number(cl) : undefined
-          log('HEAD content-length:', cl)
-        } else {
-          log('HEAD request not allowed, proceeding without byteLength')
-        }
-      } catch (e) {
-        log('HEAD failed:', e.message)
-      }
+    async function loadParquet(startRow) {
+        const filename = els.select.value;
+        if (!filename) return;
 
-      const file = await hyparquet.asyncBufferFromUrl({ url, byteLength })
-      const metadata = await hyparquet.parquetMetadataAsync(file, { byteLength })
-      const schema = hyparquet.parquetSchema(metadata)
-      const cols = schema.children.map(e => e.element.name)
-      columnsList.textContent = cols.join(', ')
-      columnSelect.value = cols.slice(0, Math.min(6, cols.length)).join(',')
-      schemaContainer.hidden = false
-      log('Schema columns:', cols.join(', '))
-      fetchStatus.textContent = 'Metadata loaded; choose columns and filter then Load.'
-    } catch (err) {
-      log('Inspect error:', err)
-      fetchStatus.textContent = 'Inspect failed: ' + err.message
-    }
-  })
+        els.error.textContent = '';
+        els.status.textContent = `Loading ${filename}...`;
+        els.container.innerHTML = '';
+        els.pagination.style.display = 'none';
+        els.filter.disabled = true;
 
-  // helper parse filter input
-  function parseFilterInput(text) {
-    text = (text || '').trim()
-    if (!text) return undefined
-    // try JSON
-    try {
-      return JSON.parse(text)
-    } catch (e) {
-      // try key=value simple
-      const m = text.match(/^([^=]+)=(.+)$/)
-      if (m) {
-        const key = m[1].trim()
-        let val = m[2].trim()
-        // try to coerce number/boolean
-        if (!isNaN(Number(val))) val = Number(val)
-        else if (val.toLowerCase() === 'true' || val.toLowerCase() === 'false') val = val.toLowerCase() === 'true'
-        return { [key]: val }
-      }
-      throw new Error('Filter must be valid JSON or simple key=value')
-    }
-  }
-
-  // Render rows into an HTML table (first come-first served)
-  function renderRows(rows, columns) {
-    tableContainer.innerHTML = ''
-    if (!rows || !rows.length) {
-      tableContainer.textContent = 'No rows found'
-      return
-    }
-    const tbl = document.createElement('table')
-    const thead = document.createElement('thead')
-    const headerRow = document.createElement('tr')
-    for (const c of columns) {
-      const th = document.createElement('th')
-      th.textContent = c
-      headerRow.appendChild(th)
-    }
-    thead.appendChild(headerRow)
-    tbl.appendChild(thead)
-    const tbody = document.createElement('tbody')
-    for (const r of rows) {
-      const tr = document.createElement('tr')
-      for (const c of columns) {
-        const td = document.createElement('td')
-        const val = r[c]
-        td.textContent = (val === undefined || val === null) ? '' : (typeof val === 'object' ? JSON.stringify(val) : String(val))
-        tr.appendChild(td)
-      }
-      tbody.appendChild(tr)
-    }
-    tbl.appendChild(tbody)
-    tableContainer.appendChild(tbl)
-  }
-
-  // Load & Render (simple batched read using parquetReadObjects; limit to 500 rows)
-  loadBtn.addEventListener('click', async () => {
-    try {
-      const url = assetSelect.value
-      if (!url) return
-      await ensureHyparquet()
-      fetchStatus.textContent = 'Loading parquet…'
-      log('Loading', url)
-      // HEAD to get size
-      let byteLength
-      try {
-        const head = await fetch(url, { method: 'HEAD' })
-        if (head.ok) {
-          const cl = head.headers.get('content-length')
-          byteLength = cl ? Number(cl) : undefined
-        }
-      } catch (e) { /* ignore */ }
-
-      const file = await hyparquet.asyncBufferFromUrl({ url, byteLength })
-      const filter = parseFilterInput(filterInput.value)
-      const columns = columnSelect.value.split(',').map(s => s.trim()).filter(Boolean) || undefined
-      // read first 500 rows to keep memory reasonable
-      const rows = await hyparquet.parquetReadObjects({ file, columns, filter, rowStart: 0, rowEnd: 500 })
-      renderRows(rows, columns || Object.keys(rows[0] || {}))
-      fetchStatus.textContent = `Loaded ${rows.length} row(s)`
-      log('Loaded rows:', rows.length)
-    } catch (err) {
-      log('Load error:', err)
-      fetchStatus.textContent = 'Load failed: ' + err.message
-    }
-  })
-
-  // Stream progressively using onChunk -> append rows as they arrive
-  streamBtn.addEventListener('click', async () => {
-    try {
-      const url = assetSelect.value
-      if (!url) return
-      await ensureHyparquet()
-      fetchStatus.textContent = 'Streaming parquet…'
-      log('Streaming', url)
-      tableContainer.innerHTML = ''
-      const head = await fetch(url, { method: 'HEAD' }).catch(() => undefined)
-      const byteLength = head && head.ok ? Number(head.headers.get('content-length')) : undefined
-      const file = await hyparquet.asyncBufferFromUrl({ url, byteLength })
-      const filter = parseFilterInput(filterInput.value)
-      const columns = columnSelect.value.split(',').map(s => s.trim()).filter(Boolean) || undefined
-
-      // build table skeleton
-      const tbl = document.createElement('table')
-      const thead = document.createElement('thead')
-      const headerRow = document.createElement('tr')
-      const colnames = columns || []
-      if (!colnames.length) {
-        // unknown yet; will adapt dynamically on first chunk
-      } else {
-        for (const c of colnames) {
-          const th = document.createElement('th'); th.textContent = c; headerRow.appendChild(th)
-        }
-        thead.appendChild(headerRow)
-        tbl.appendChild(thead)
-      }
-      const tbody = document.createElement('tbody')
-      tbl.appendChild(tbody)
-      tableContainer.appendChild(tbl)
-
-      // onChunk callback receives column-wise chunks; convert to rows and append
-      let total = 0
-      await hyparquet.parquetRead({
-        file,
-        columns,
-        filter,
-        rowFormat: 'object',
-        onChunk(chunk) {
-          // chunk.columnName & chunk.columnData (array of typed arrays or arrays)
-          // But parquetRead gives column-chunks; simpler approach: call parquetReadObjects fallback above
-          // However we can still handle when onComplete isn't used. For simplicity: we will ignore onChunk here and rely on onComplete.
-        },
-        onComplete(rows) {
-          // onComplete gives all rows as objects
-          if (!rows.length) {
-            log('No rows from onComplete')
-            fetchStatus.textContent = 'No rows'
-            return
-          }
-          // set up headers if not already
-          const keys = columns && columns.length ? columns : Object.keys(rows[0])
-          if (!thead.childElementCount) {
-            const hdr = document.createElement('tr')
-            for (const k of keys) {
-              const th = document.createElement('th'); th.textContent = k; hdr.appendChild(th)
+        try {
+            const url = BASE_URL + filename;
+            
+            // 1. Initialize file buffer
+            if (!currentFile || els.select.value !== currentFile.name) {
+                currentFile = {
+                    name: filename,
+                    buffer: await asyncBufferFromUrl({ url })
+                };
+                
+                // Read metadata to get total row count
+                const metadata = await parquetMetadataAsync(currentFile.buffer);
+                totalRows = Number(metadata.num_rows);
             }
-            thead.appendChild(hdr)
-          }
-          // append rows
-          for (const r of rows) {
-            const tr = document.createElement('tr')
-            for (const k of keys) {
-              const td = document.createElement('td'); const val = r[k]
-              td.textContent = (val === undefined || val === null) ? '' : (typeof val === 'object' ? JSON.stringify(val) : String(val))
-              tr.appendChild(td)
-            }
-            tbody.appendChild(tr)
-            total++
-            if (total % 100 === 0) fetchStatus.textContent = 'Appended ' + total + ' rows…'
-          }
-          fetchStatus.textContent = 'Stream complete — total rows: ' + total
-          log('Stream complete — total rows:', total)
-        }
-      })
-    } catch (err) {
-      log('Stream error:', err)
-      fetchStatus.textContent = 'Stream failed: ' + err.message
-    }
-  })
 
-  </script>
+            // 2. Validate bounds
+            if (startRow < 0) startRow = 0;
+            if (startRow >= totalRows) startRow = Math.max(0, totalRows - PAGE_SIZE);
+            currentRowStart = startRow;
+
+            // 3. Read Data
+            const data = await parquetReadObjects({
+                file: currentFile.buffer,
+                rowStart: currentRowStart,
+                rowEnd: currentRowStart + PAGE_SIZE
+            });
+
+            allDataOnPage = data; // Cache for filtering
+            
+            // 4. Update UI
+            els.status.textContent = `Loaded rows ${currentRowStart + 1} to ${Math.min(currentRowStart + PAGE_SIZE, totalRows)} of ${totalRows}`;
+            renderTable(data);
+            
+            // 5. Update Pagination
+            els.pagination.style.display = 'flex';
+            els.prevBtn.disabled = currentRowStart === 0;
+            els.nextBtn.disabled = (currentRowStart + PAGE_SIZE) >= totalRows;
+            els.pageInfo.textContent = `Page ${Math.floor(currentRowStart / PAGE_SIZE) + 1}`;
+            els.filter.disabled = false;
+            els.filter.focus();
+
+        } catch (err) {
+            console.error(err);
+            els.status.textContent = '';
+            els.error.textContent = `Error loading file: ${err.message}. \nNote: If this is a CORS error, GitHub Release assets might be blocking the request.`;
+        }
+    }
+
+    function renderTable(data) {
+        if (!data || data.length === 0) {
+            els.container.innerHTML = '<p>No data found.</p>';
+            return;
+        }
+
+        const keys = Object.keys(data[0]);
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        const tbody = document.createElement('tbody');
+
+        // Header
+        const headerRow = document.createElement('tr');
+        keys.forEach(k => {
+            const th = document.createElement('th');
+            th.textContent = k;
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+
+        // Body
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            keys.forEach(k => {
+                const td = document.createElement('td');
+                const val = row[k];
+                // Simple formatting for objects/arrays
+                td.textContent = (typeof val === 'object' && val !== null) ? JSON.stringify(val) : val;
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+
+        table.appendChild(thead);
+        table.appendChild(tbody);
+        els.container.innerHTML = '';
+        els.container.appendChild(table);
+    }
+</script>
+
 </body>
 </html>
