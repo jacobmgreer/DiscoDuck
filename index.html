@@ -98,20 +98,20 @@
 </div>
 
 <script type="module">
+    // Core library
     import { asyncBufferFromUrl, parquetReadObjects, parquetMetadataAsync } from 'https://cdn.jsdelivr.net/npm/hyparquet/src/index.js';
-    
+    // Compressors (loaded via esm.sh to handle ZSTD/Snappy dependencies automatically)
+    import { compressors } from 'https://esm.sh/hyparquet-compressors';
+
     const RELEASE_TAG = '2026-02';
-    // Use a CORS proxy if direct GitHub downloads are blocked by browser security. 
-    // For direct GitHub Pages usage, usually GitHub releases redirect and can be tricky with CORS.
-    // If this fails, consider using a proxy like 'https://cors-anywhere.herokuapp.com/' prefix 
-    // OR hosting the parquet files in the gh-pages branch itself.
+    // Use a CORS proxy if direct GitHub downloads are blocked by browser security.
     const BASE_URL = `https://github.com/jacobmgreer/DiscoDuck/releases/download/${RELEASE_TAG}/`;
     
     let currentFile = null;
     let currentRowStart = 0;
     const PAGE_SIZE = 100;
     let totalRows = 0;
-    let allDataOnPage = []; // Store raw data for client-side filtering
+    let allDataOnPage = []; 
 
     const els = {
         select: document.getElementById('fileSelect'),
@@ -168,14 +168,15 @@
             if (startRow >= totalRows) startRow = Math.max(0, totalRows - PAGE_SIZE);
             currentRowStart = startRow;
 
-            // 3. Read Data
+            // 3. Read Data (Now with compressors!)
             const data = await parquetReadObjects({
                 file: currentFile.buffer,
+                compressors: compressors, // <--- Added here
                 rowStart: currentRowStart,
                 rowEnd: currentRowStart + PAGE_SIZE
             });
 
-            allDataOnPage = data; // Cache for filtering
+            allDataOnPage = data; 
             
             // 4. Update UI
             els.status.textContent = `Loaded rows ${currentRowStart + 1} to ${Math.min(currentRowStart + PAGE_SIZE, totalRows)} of ${totalRows}`;
@@ -222,7 +223,6 @@
             keys.forEach(k => {
                 const td = document.createElement('td');
                 const val = row[k];
-                // Simple formatting for objects/arrays
                 td.textContent = (typeof val === 'object' && val !== null) ? JSON.stringify(val) : val;
                 tr.appendChild(td);
             });
