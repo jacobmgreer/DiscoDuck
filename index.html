@@ -100,11 +100,10 @@
 <script type="module">
     // Core library
     import { asyncBufferFromUrl, parquetReadObjects, parquetMetadataAsync } from 'https://cdn.jsdelivr.net/npm/hyparquet/src/index.js';
-    // Compressors (loaded via esm.sh to handle ZSTD/Snappy dependencies automatically)
+    // Compressors
     import { compressors } from 'https://esm.sh/hyparquet-compressors';
 
     const RELEASE_TAG = '2026-02';
-    // Use a CORS proxy if direct GitHub downloads are blocked by browser security.
     const BASE_URL = `https://github.com/jacobmgreer/DiscoDuck/releases/download/${RELEASE_TAG}/`;
     
     let currentFile = null;
@@ -151,38 +150,32 @@
         try {
             const url = BASE_URL + filename;
             
-            // 1. Initialize file buffer
             if (!currentFile || els.select.value !== currentFile.name) {
                 currentFile = {
                     name: filename,
                     buffer: await asyncBufferFromUrl({ url })
                 };
                 
-                // Read metadata to get total row count
                 const metadata = await parquetMetadataAsync(currentFile.buffer);
                 totalRows = Number(metadata.num_rows);
             }
 
-            // 2. Validate bounds
             if (startRow < 0) startRow = 0;
             if (startRow >= totalRows) startRow = Math.max(0, totalRows - PAGE_SIZE);
             currentRowStart = startRow;
 
-            // 3. Read Data (Now with compressors!)
             const data = await parquetReadObjects({
                 file: currentFile.buffer,
-                compressors: compressors, // <--- Added here
+                compressors: compressors,
                 rowStart: currentRowStart,
                 rowEnd: currentRowStart + PAGE_SIZE
             });
 
             allDataOnPage = data; 
             
-            // 4. Update UI
             els.status.textContent = `Loaded rows ${currentRowStart + 1} to ${Math.min(currentRowStart + PAGE_SIZE, totalRows)} of ${totalRows}`;
             renderTable(data);
             
-            // 5. Update Pagination
             els.pagination.style.display = 'flex';
             els.prevBtn.disabled = currentRowStart === 0;
             els.nextBtn.disabled = (currentRowStart + PAGE_SIZE) >= totalRows;
@@ -195,6 +188,11 @@
             els.status.textContent = '';
             els.error.textContent = `Error loading file: ${err.message}. \nNote: If this is a CORS error, GitHub Release assets might be blocking the request.`;
         }
+    }
+
+    // Helper to handle BigInts in JSON.stringify
+    function bigIntReplacer(key, value) {
+        return typeof value === 'bigint' ? value.toString() : value;
     }
 
     function renderTable(data) {
@@ -223,7 +221,17 @@
             keys.forEach(k => {
                 const td = document.createElement('td');
                 const val = row[k];
-                td.textContent = (typeof val === 'object' && val !== null) ? JSON.stringify(val) : val;
+                
+                // --- FIX: Explicitly handle BigInts ---
+                if (typeof val === 'bigint') {
+                    td.textContent = val.toString();
+                } else if (typeof val === 'object' && val !== null) {
+                    // Safe stringify with replacer for arrays/objects containing BigInts
+                    td.textContent = JSON.stringify(val, bigIntReplacer);
+                } else {
+                    td.textContent = val;
+                }
+                
                 tr.appendChild(td);
             });
             tbody.appendChild(tr);
