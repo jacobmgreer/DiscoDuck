@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DiscoDuck Label Browser</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 2rem; line-height: 1.5; color: #24292f; }
+        h1 { margin-bottom: 0.5rem; }
+        .header { margin-bottom: 2rem; border-bottom: 1px solid #e1e4e8; padding-bottom: 1rem; }
+        .back-link { display: inline-block; margin-bottom: 1rem; color: #0969da; text-decoration: none; font-weight: bold; cursor: pointer; }
+        .back-link:hover { text-decoration: underline; }
+        
+        /* Controls */
+        .controls { background: #f6f8fa; padding: 1rem; border-radius: 6px; border: 1px solid #d0d7de; margin-bottom: 1rem; }
+        input[type="text"] { padding: 6px 12px; font-size: 16px; border: 1px solid #d0d7de; border-radius: 6px; width: 300px; }
+        button { padding: 6px 12px; font-size: 16px; background-color: #2da44e; color: white; border: 1px solid rgba(27,31,35,0.15); border-radius: 6px; cursor: pointer; }
+        button:disabled { background-color: #94d3a2; cursor: not-allowed; }
+        button.secondary { background-color: #f6f8fa; color: #24292f; border-color: rgba(27,31,35,0.15); }
+        
+        /* Table */
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 1rem; }
+        th, td { border: 1px solid #d0d7de; padding: 8px 12px; text-align: left; }
+        th { background-color: #f6f8fa; font-weight: 600; }
+        tr:nth-child(even) { background-color: #fcfcfc; }
+        tr:hover { background-color: #f3f4f6; }
+        
+        /* Specific Columns */
+        .col-id { width: 80px; font-family: monospace; }
+        .col-name { font-weight: 600; color: #0969da; cursor: pointer; }
+        .col-name:hover { text-decoration: underline; }
+
+        /* Status & Layout */
+        .status-bar { margin: 1rem 0; padding: 0.5rem; border-radius: 4px; background: #ddf4ff; color: #0969da; font-size: 0.9em; display: none; }
+        .error { color: #cf222e; background: #ffebe9; padding: 1rem; border-radius: 6px; border: 1px solid #ff818266; margin-bottom: 1rem; display: none; }
+        .pagination { display: flex; gap: 10px; align-items: center; margin-top: 1rem; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1 id="pageTitle">DiscoDuck Data</h1>
+    <div id="subTitle">Release 2026-02</div>
+</div>
+
+<div id="errorMsg" class="error"></div>
+<div id="statusBar" class="status-bar"></div>
+
+<!-- VIEW: LABEL LIST -->
+<div id="view-labels" style="display:none;">
+    <div class="controls">
+        <label for="labelFilter"><strong>Find Label:</strong></label>
+        <input type="text" id="labelFilter" placeholder="Filter name on current page...">
+    </div>
+    <div class="table-container">
+        <table id="labelsTable">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Data Quality</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+    <div class="pagination">
+        <button id="lblPrev">Previous</button>
+        <span id="lblPageInfo"></span>
+        <button id="lblNext">Next</button>
+    </div>
+</div>
+
+<!-- VIEW: RELEASES LIST -->
+<div id="view-releases" style="display:none;">
+    <a href="#" class="back-link">← Back to Labels</a>
+    <h3>Releases for Label ID: <span id="currentLabelId"></span></h3>
+    
+    <div class="controls">
+        <p>Scanning <code>Classical-releases-basics.parquet</code> for matching releases...</p>
+        <button id="scanMoreBtn" class="secondary" style="display:none;">Scan More Rows</button>
+    </div>
+
+    <div class="table-container">
+        <table id="releasesTable">
+            <thead>
+                <!-- Columns populated dynamically -->
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<script type="module">
+    import { asyncBufferFromUrl, parquetReadObjects, parquetMetadataAsync } from 'https://cdn.jsdelivr.net/npm/hyparquet/src/index.js';
+    import { compressors } from 'https://esm.sh/hyparquet-compressors';
+
+    const CONFIG = {
+        releaseTag: '2026-02',
+        repo: 'jacobmgreer/DiscoDuck',
+        pageSize: 100,
+        scanChunkSize: 2000 // Rows to read at once when scanning for matches
+    };
+
+    const getUrl = (file) => `https://github.com/${CONFIG.repo}/releases/download/${CONFIG.releaseTag}/${file}`;
+
+    // State
+    const state = {
+        labelFile: { name: '_labels.parquet', buffer: null, totalRows: 0 },
+        releaseFile: { name: 'Classical-releases-basics.parquet', buffer: null, totalRows: 0 },
+        labels: { page: 0, data: [] }, // Cache for current page
+        releases: { cursor: 0, matches: [], isScanning: false }
+    };
+
+    // DOM Elements
+    const els = {
+        views: { labels: document.getElementById('view-labels'), releases: document.getElementById('view-releases') },
+        labels: {
+            table: document.getElementById('labelsTable').querySelector('tbody'),
+            filter: document.getElementById('labelFilter'),
+            prev: document.getElementById('lblPrev'),
+            next: document.getElementById('lblNext'),
+            info: document.getElementById('lblPageInfo')
+        },
+        releases: {
+            table: document.getElementById('releasesTable'),
+            labelIdDisplay: document.getElementById('currentLabelId'),
+            scanBtn: document.getElementById('scanMoreBtn')
+        },
+        status: document.getElementById('statusBar'),
+        error: document.getElementById('errorMsg'),
+        title: document.getElementById('pageTitle')
+    };
+
+    // --- ROUTER ---
+    window.addEventListener('hashchange', handleRoute);
+    window.addEventListener('load', handleRoute);
+
+    function handleRoute() {
+        const hash = window.location.hash.substring(1); // Remove #
+        if (hash && /^\d+$/.test(hash)) {
+            loadReleasesView(hash);
+        } else {
+            loadLabelsView();
+        }
+    }
+
+    // --- VIEW: LABELS ---
+    async function loadLabelsView() {
+        showView('labels');
+        els.title.textContent = "Labels";
+        
+        if (!state.labelFile.buffer) {
+            try {
+                setStatus('Loading _labels.parquet metadata...');
+                const buffer = await asyncBufferFromUrl({ url: getUrl(state.labelFile.name) });
+                const metadata = await parquetMetadataAsync(buffer);
+                state.labelFile.buffer = buffer;
+                state.labelFile.totalRows = Number(metadata.num_rows);
+            } catch (e) {
+                showError("Failed to load labels file. " + e.message);
+                return;
+            }
+        }
+        
+        // Initial load if empty
+        if (state.labels.data.length === 0) {
+            await fetchLabelPage(0);
+        } else {
+            renderLabelsTable(state.labels.data);
+            updateLabelControls();
+            setStatus('');
+        }
+    }
+
+    async function fetchLabelPage(rowStart) {
+        setStatus(`Loading labels ${rowStart}...`);
+        try {
+            // Only fetch needed columns for speed
+            const data = await parquetReadObjects({
+                file: state.labelFile.buffer,
+                compressors,
+                columns: ['id', 'name', 'data_quality'],
+                rowStart: rowStart,
+                rowEnd: rowStart + CONFIG.pageSize
+            });
+            
+            state.labels.page = rowStart;
+            state.labels.data = data;
+            
+            // Clear filter when changing pages
+            els.labels.filter.value = '';
+            renderLabelsTable(data);
+            updateLabelControls();
+            setStatus('');
+        } catch (e) {
+            showError(e.message);
+        }
+    }
+
+    function renderLabelsTable(data) {
+        els.labels.table.innerHTML = '';
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            
+            // ID
+            const tdId = document.createElement('td');
+            tdId.textContent = row.id.toString();
+            tdId.className = 'col-id';
+            
+            // Name (Link)
+            const tdName = document.createElement('td');
+            tdName.textContent = row.name;
+            tdName.className = 'col-name';
+            tdName.onclick = () => window.location.hash = row.id.toString();
+            
+            // Quality
+            const tdQual = document.createElement('td');
+            tdQual.textContent = row.data_quality || '-';
+
+            tr.appendChild(tdId);
+            tr.appendChild(tdName);
+            tr.appendChild(tdQual);
+            els.labels.table.appendChild(tr);
+        });
+    }
+
+    function updateLabelControls() {
+        const start = state.labels.page;
+        const total = state.labelFile.totalRows;
+        els.labels.info.textContent = `${start + 1} - ${Math.min(start + CONFIG.pageSize, total)} of ${total}`;
+        els.labels.prev.disabled = start === 0;
+        els.labels.next.disabled = (start + CONFIG.pageSize) >= total;
+    }
+
+    // --- VIEW: RELEASES ---
+    async function loadReleasesView(labelId) {
+        showView('releases');
+        els.title.textContent = "Releases";
+        els.releases.labelIdDisplay.textContent = labelId;
+        els.releases.table.innerHTML = ''; // Clear previous
+        state.releases.matches = [];
+        state.releases.cursor = 0; // Reset scan cursor
+        
+        if (!state.releaseFile.buffer) {
+            try {
+                setStatus('Loading release file metadata...');
+                const buffer = await asyncBufferFromUrl({ url: getUrl(state.releaseFile.name) });
+                const metadata = await parquetMetadataAsync(buffer);
+                state.releaseFile.buffer = buffer;
+                state.releaseFile.totalRows = Number(metadata.num_rows);
+            } catch (e) {
+                showError("Failed to load releases file. " + e.message);
+                return;
+            }
+        }
+
+        // Start scanning automatically
+        scanForReleases(labelId);
+    }
+
+    /**
+     * Scans the parquet file in chunks looking for the label ID.
+     */
+    async function scanForReleases(targetLabelId) {
+        if (state.releases.isScanning) return;
+        state.releases.isScanning = true;
+        els.releases.scanBtn.style.display = 'none';
+        
+        // Ensure string comparison for BigInts
+        const targetStr = targetLabelId.toString();
+        let matchesFoundInThisRun = 0;
+        const BATCH_TARGET = 20; // Try to find 20 matches then stop to render
+
+        try {
+            while (state.releases.cursor < state.releaseFile.totalRows) {
+                const start = state.releases.cursor;
+                const end = Math.min(start + CONFIG.scanChunkSize, state.releaseFile.totalRows);
+                
+                setStatus(`Scanning rows ${start} to ${end} for Label ID ${targetStr}... (Found: ${state.releases.matches.length})`);
+
+                const chunk = await parquetReadObjects({
+                    file: state.releaseFile.buffer,
+                    compressors,
+                    rowStart: start,
+                    rowEnd: end
+                });
+
+                // Filter logic
+                for (const row of chunk) {
+                    if (row.labels) {
+                        let hasLabel = false;
+                        // Handle 'labels' column formats
+                        if (Array.isArray(row.labels)) {
+                            // Struct array: [{id: 1, name: '...'}, ...]
+                            hasLabel = row.labels.some(l => l.id && l.id.toString() === targetStr);
+                        } else if (typeof row.labels === 'string') {
+                            // JSON string: "[{...}]"
+                            try {
+                                const parsed = JSON.parse(row.labels);
+                                if (Array.isArray(parsed)) {
+                                    hasLabel = parsed.some(l => l.id && l.id.toString() === targetStr);
+                                }
+                            } catch(e) {}
+                        }
+
+                        if (hasLabel) {
+                            state.releases.matches.push(row);
+                            matchesFoundInThisRun++;
+                        }
+                    }
+                }
+
+                state.releases.cursor = end;
+
+                // Stop if we found enough for a view, let user ask for more
+                if (matchesFoundInThisRun >= BATCH_TARGET) {
+                    break;
+                }
+            }
+
+            renderReleasesTable(state.releases.matches);
+            
+            if (state.releases.cursor >= state.releaseFile.totalRows) {
+                setStatus(`Scan complete. Found ${state.releases.matches.length} releases.`);
+            } else {
+                setStatus(`Paused scan. Found ${state.releases.matches.length} matches so far.`);
+                els.releases.scanBtn.style.display = 'inline-block';
+                els.releases.scanBtn.onclick = () => scanForReleases(targetLabelId);
+            }
+
+        } catch (e) {
+            showError("Error scanning file: " + e.message);
+        } finally {
+            state.releases.isScanning = false;
+        }
+    }
+
+    function renderReleasesTable(rows) {
+        if (rows.length === 0) {
+            els.releases.table.innerHTML = '<p>No matches found yet.</p>';
+            return;
+        }
+
+        const thead = els.releases.table.querySelector('thead') || document.createElement('thead');
+        const tbody = els.releases.table.querySelector('tbody') || document.createElement('tbody');
+        
+        // Rebuild header if first render or cleared
+        if (!thead.hasChildNodes()) {
+            els.releases.table.innerHTML = '';
+            const headerRow = document.createElement('tr');
+            // Pick a few important columns to show first, then the rest
+            const sample = rows[0];
+            const priorityKeys = ['id', 'title', 'year', 'artists'];
+            const allKeys = Object.keys(sample);
+            const keys = [...new Set([...priorityKeys, ...allKeys])]; // Merge unique
+
+            keys.forEach(k => {
+                const th = document.createElement('th');
+                th.textContent = k;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+            els.releases.table.appendChild(thead);
+            els.releases.table.appendChild(tbody);
+        }
+
+        // Only append NEW rows (naive impl assumes we redraw all for now or clear)
+        // Optimization: clear and redraw all matches to keep sorted order if needed
+        tbody.innerHTML = ''; 
+        
+        const keys = Array.from(els.releases.table.querySelectorAll('th')).map(th => th.textContent);
+
+        rows.forEach(row => {
+            const tr = document.createElement('tr');
+            keys.forEach(k => {
+                const td = document.createElement('td');
+                const val = row[k];
+                
+                if (typeof val === 'bigint') {
+                    td.textContent = val.toString();
+                } else if (typeof val === 'object' && val !== null) {
+                    td.textContent = JSON.stringify(val, (k,v) => typeof v === 'bigint' ? v.toString() : v);
+                } else {
+                    td.textContent = val !== undefined ? val : '';
+                }
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+    }
+
+    // --- HELPERS ---
+    function showView(name) {
+        els.views.labels.style.display = 'none';
+        els.views.releases.style.display = 'none';
+        els.views[name].style.display = 'block';
+        els.error.style.display = 'none';
+    }
+
+    function setStatus(msg) {
+        els.status.style.display = msg ? 'block' : 'none';
+        els.status.textContent = msg;
+    }
+
+    function showError(msg) {
+        els.error.style.display = 'block';
+        els.error.textContent = msg;
+        els.status.style.display = 'none';
+    }
+
+    // --- EVENT LISTENERS ---
+    
+    // Label Pagination
+    els.labels.prev.addEventListener('click', () => {
+        const newStart = state.labels.page - CONFIG.pageSize;
+        if (newStart >= 0) fetchLabelPage(newStart);
+    });
+
+    els.labels.next.addEventListener('click', () => {
+        const newStart = state.labels.page + CONFIG.pageSize;
+        if (newStart < state.labelFile.totalRows) fetchLabelPage(newStart);
+    });
+
+    // Label Filter (Client-side on current page)
+    els.labels.filter.addEventListener('input', (e) => {
+        const term = e.target.value.toLowerCase();
+        const filtered = state.labels.data.filter(r => 
+            r.name && r.name.toLowerCase().includes(term)
+        );
+        renderLabelsTable(filtered);
+    });
+
+</script>
+
+</body>
+</html>
